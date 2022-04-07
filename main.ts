@@ -18,19 +18,25 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	
 }
 
+function setIcon(cont, icon, name) {
+	const old = document.querySelector('[aria-label^="Custom Sync"]')
+	if(old != null)
+		old.remove()
+	cont.addRibbonIcon(icon, "Custom Sync - "+name, () => {})
+}
+
 //PROBABLY should exclude the plugins folder in our .obsidian
 //Although idk
-function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings) {
+function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings, cont, icon: string):any {
 
 	//console.log("Syncing...\n[Source: "+source+"]\n[Dest: "+dest+"]");
-	console.log("Syncing...")
 	//changeRibbonIcon("Custom Sync", "clock")
+	setIcon(cont, icon, "Syncing...")
 	
 	var rsync = new Rsync()
-		.flags("rqcn")
+		.flags("rqc")
 		.executable(settings.cygwinPath+" -lc 'rsync")
 		.set("rsh", "ssh -i "+settings.keyPath)
-		.set("size-only")
 		.set("exclude", "*plugins") //Fuck plugins bro
 		.source(source)
 		.destination(dest)
@@ -45,67 +51,46 @@ function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings) 
 	if(pass === "true")
 		rsync.execute(function(error, code, cmd) {
 			if(error == null)
-				console.log("Done!");
+				setIcon(cont, "checkbox-glyph", "Up to date")
 			else
-				console.log(error);
+				setIcon(cont, "cross", error)
 		});
 	else
-		console.log("Sync failed! \""+pass+"\"")
+		setIcon(cont, "cross", "Sync failed! \""+pass+"\"")
 	
 }
 
-function rsyncdelete(localPath: string, filePath: string, settings: MyPluginSettings, vaultName: string) {
-	console.log("Removing old file...")
+function rsyncdelete(localPath: string, settings: MyPluginSettings, vaultName: string, resync = true, cont) {
+	//console.log("Removing old file...")
+	setIcon(cont, "sheets-in-box", "Processing changed file...")
+
 	localPath = "/cygdrive/c/"+localPath;
-	const fileName = filePath.split("/").last()
-	filePath = filePath.slice(0, -fileName.length)
 	var rsync = new Rsync()
-		.flags("rn")
+		.flags("r")
 		.executable(settings.cygwinPath+" -lc 'rsync")
 		.set("rsh", "ssh -i "+settings.keyPath)
 		.set("delete")
-		.set("include", fileName)
-		.set("exclude", "*")
-		.source(localPath+vaultName+"/.obsidian/") //A directory not containing the file we're deleting (recursively) is needed. Thank god for this one.
-		.destination(`${settings.remoteUrl}:"${settings.remotePath+vaultName}/${filePath}"`)
+		.source(localPath+vaultName)
+		.destination(settings.remoteUrl+":"+settings.remotePath)
 
 	//Quick validation
 	var pass = "true" //Lol
 	if(settings.keyPath == "")
 		pass = "No key"
 	
-	console.log(rsync.command())
-	rsync.output(
-		function(data){
-			console.log(data)
-		}, function(data) {
-			console.log("ERROR!!")
-			console.log(data)
-		}
-	);
+	//console.log(rsync.command())
+
 	if(pass === "true")
 		rsync.execute(function(error, code, cmd) {
 			if(error == null) {
-				rsyncwrapper(localPath+vaultName, settings.remoteUrl+":"+settings.remotePath, settings)
+				if(resync) //If the file was moved, we resync to put its new location on the server
+					rsyncwrapper(localPath+vaultName, settings.remoteUrl+":"+settings.remotePath, settings, cont, "up-arrow-with-tail")
 			}
 			else
-				console.log(error);
+				setIcon(cont, "cross", error)
 		});
 	else
-		console.log("Sync failed! \""+pass+"\"")
-}
-
-function changeRibbonIcon(name: string, icon: string) {
-	var elem = document.querySelector('div[aria-label*="'+name+'"]');
-	if(elem == null) 
-		return;
-	
-
-	elem.remove();
-	const ribbonIconEl = this.addRibbonIcon('clock', 'Custom Sync', (evt: MouseEvent) => {
-		// Called when the user clicks the icon.
-		new Notice('This is a notice!');
-	});
+	setIcon(cont, "cross", "Sync failed! \""+pass+"\"")
 }
 
 export default class MyPlugin extends Plugin {
@@ -113,7 +98,8 @@ export default class MyPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-
+		
+		//Clean this up eventually
 		//"Globals"
 		const debug = false;
 		const vaultName = this.app.vault.getName();
@@ -123,97 +109,33 @@ export default class MyPlugin extends Plugin {
 		const local = "/cygdrive/c/"+this.app.vault.adapter.basePath.slice(3, -vaultName.length);
 		const settings = this.settings
 		var app = this.app
-
-
+		var cont = this;
+	
 		//On load, we should sync from server to local.
-		rsyncwrapper(remote+vaultName, local, this.settings);
-		
-		//Should we then sync the other way to move files that are somehow newer over? Shouldn't happen but it does in development lol
-
+		this.registerEvent(this.app.workspace.on("css-change", ()=> {
+			rsyncwrapper(remote+vaultName, local, this.settings, cont, "down-arrow-with-tail")
+		}))
 
 		//New Vault created, see if it exists on remote and if not put it there.
 		//If it does exist, move from remote to local. This really shouldn't be that big a deal but we might encounter it.
 		
 		//On Vault save, sync to remote 
-		this.registerEvent(this.app.vault.on("modify", ()=>{rsyncwrapper(local+vaultName, remote, this.settings)}));
+		this.registerEvent(this.app.vault.on("modify", ()=>{
+			rsyncwrapper(local+vaultName, remote, this.settings, cont, "up-arrow-with-tail")
+			}));
 
 		//On file delete
 		this.registerEvent(this.app.vault.on('delete', function(file){
-			console.log((file));
+			rsyncdelete(app.vault.adapter.basePath.slice(3, -vaultName.length), settings, vaultName, false, cont) //Slice is WINDOWS ONLY
 		}));
 
 		//On file move/rename
 		this.registerEvent(this.app.vault.on('rename', function(file, oldPath){
-			rsyncdelete(app.vault.adapter.basePath.slice(3, -vaultName.length), oldPath, settings, vaultName) //Slice is WINDOWS ONLY
-			//rsyncwrapper(local+vaultName, remote, settings) //Resync new changes
+			rsyncdelete(app.vault.adapter.basePath.slice(3, -vaultName.length), settings, vaultName, true, cont) //Slice is WINDOWS ONLY
 		}));
-
-		// This creates an icon in the left ribbon.
-		const ribbonIconEl = this.addRibbonIcon('clock', 'Custom Sync', (evt: MouseEvent) => {
-			// Called when the user clicks the icon.
-			new Notice('This is a notice!');
-		});
-
-		//console.log(ribbonIconEl);
-
-		//Keeping this for reference lol
-		if(debug) {
-			// Perform additional things with the ribbon
-			ribbonIconEl.addClass('my-plugin-ribbon-class');
-
-			// This adds a status bar item to the bottom of the app. Does not work on mobile apps.
-			const statusBarItemEl = this.addStatusBarItem();
-			statusBarItemEl.setText('Status Bar Text');
-
-			// This adds a simple command that can be triggered anywhere
-			this.addCommand({
-				id: 'open-sample-modal-simple',
-				name: 'Open sample modal (simple)',
-				callback: () => {
-					new SampleModal(this.app).open();
-				}
-			});
-			// This adds an editor command that can perform some operation on the current editor instance
-			this.addCommand({
-				id: 'sample-editor-command',
-				name: 'Sample editor command',
-				editorCallback: (editor: Editor, view: MarkdownView) => {
-					console.log(editor.getSelection());
-					editor.replaceSelection('Sample Editor Command');
-				}
-			});
-			// This adds a complex command that can check whether the current state of the app allows execution of the command
-			this.addCommand({
-				id: 'open-sample-modal-complex',
-				name: 'Open sample modal (complex)',
-				checkCallback: (checking: boolean) => {
-					// Conditions to check
-					const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-					if (markdownView) {
-						// If checking is true, we're simply "checking" if the command can be run.
-						// If checking is false, then we want to actually perform the operation.
-						if (!checking) {
-							new SampleModal(this.app).open();
-						}
-
-						// This command will only show up in Command Palette when the check function returns true
-						return true;
-					}
-				}
-			});
-		}
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
-
-		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
-		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			//console.log('click', evt);
-		});
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		//this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
@@ -226,22 +148,6 @@ export default class MyPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		const {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
 	}
 }
 
