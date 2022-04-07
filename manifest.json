@@ -1,0 +1,10 @@
+{
+	"id": "custom-sync",
+	"name": "Custom Sync",
+	"version": "1.0.0",
+	"minAppVersion": "0.12.0",
+	"description": "A custom sync plugin for fellow broke people. Requires your own server to rsync with.",
+	"author": "Aiden Baker",
+	"authorUrl": "",
+	"isDesktopOnly": false
+}
