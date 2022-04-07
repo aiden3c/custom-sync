@@ -116,11 +116,6 @@ export default class MyPlugin extends Plugin {
 		
 		//Should we then sync the other way to move files that are somehow newer over? Shouldn't happen but it does in development lol
 
-		
-		//Local to server
-		//rsyncwrapper(keyPath, local+vaultName, remote)
-
-
 
 		//New Vault created, see if it exists on remote and if not put it there.
 		//If it does exist, move from remote to local. This really shouldn't be that big a deal but we might encounter it.
