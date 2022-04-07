@@ -23,7 +23,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings) {
 
 	//console.log("Syncing...\n[Source: "+source+"]\n[Dest: "+dest+"]");
-	
+	console.log("Syncing...")
 	
 	var rsync = new Rsync()
 		.flags("rqu")
@@ -39,7 +39,7 @@ function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings) 
 	if(settings.keyPath == "")
 		pass = "No key"
 	
-	console.log(rsync.command())
+	//console.log(rsync.command())
 
 	if(pass === "true")
 		rsync.execute(function(error, code, cmd) {
@@ -54,6 +54,7 @@ function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings) 
 }
 
 function rsyncdelete(localPath: string, filePath: string, settings: MyPluginSettings, vaultName: string) {
+	console.log("Removing old file...")
 	localPath = "/cygdrive/c/"+localPath;
 	const fileName = filePath.split("/").last()
 	filePath = filePath.slice(0, -fileName.length)
@@ -64,7 +65,7 @@ function rsyncdelete(localPath: string, filePath: string, settings: MyPluginSett
 		.set("delete")
 		.set("include", fileName)
 		.set("exclude", "*")
-		.source(localPath+vaultName+"/.obsidian/") //A directory not containing the file we're deleting is needed. Thank god for this one.
+		.source(localPath+vaultName+"/.obsidian/") //A directory not containing the file we're deleting (recursively) is needed. Thank god for this one.
 		.destination(settings.remoteUrl+":"+settings.remotePath+vaultName+"/"+filePath)
 
 	//Quick validation
@@ -72,7 +73,7 @@ function rsyncdelete(localPath: string, filePath: string, settings: MyPluginSett
 	if(settings.keyPath == "")
 		pass = "No key"
 	
-	console.log(rsync.command())
+	//console.log(rsync.command())
 	rsync.output(
 		function(data){
 			console.log(data)
@@ -111,7 +112,7 @@ export default class MyPlugin extends Plugin {
 
 
 		//On load, we should sync from server to local.
-		//rsyncwrapper(remote+vaultName, local, this.settings);
+		rsyncwrapper(remote+vaultName, local, this.settings);
 		
 		//Should we then sync the other way to move files that are somehow newer over? Shouldn't happen but it does in development lol
 
