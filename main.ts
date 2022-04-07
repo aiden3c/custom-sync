@@ -24,9 +24,10 @@ function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings) 
 
 	//console.log("Syncing...\n[Source: "+source+"]\n[Dest: "+dest+"]");
 	console.log("Syncing...")
+	//changeRibbonIcon("Custom Sync", "clock")
 	
 	var rsync = new Rsync()
-		.flags("rqu")
+		.flags("rqcn")
 		.executable(settings.cygwinPath+" -lc 'rsync")
 		.set("rsh", "ssh -i "+settings.keyPath)
 		.set("size-only")
@@ -59,21 +60,21 @@ function rsyncdelete(localPath: string, filePath: string, settings: MyPluginSett
 	const fileName = filePath.split("/").last()
 	filePath = filePath.slice(0, -fileName.length)
 	var rsync = new Rsync()
-		.flags("r")
+		.flags("rn")
 		.executable(settings.cygwinPath+" -lc 'rsync")
 		.set("rsh", "ssh -i "+settings.keyPath)
 		.set("delete")
 		.set("include", fileName)
 		.set("exclude", "*")
 		.source(localPath+vaultName+"/.obsidian/") //A directory not containing the file we're deleting (recursively) is needed. Thank god for this one.
-		.destination(settings.remoteUrl+":"+settings.remotePath+vaultName+"/"+filePath)
+		.destination(`${settings.remoteUrl}:"${settings.remotePath+vaultName}/${filePath}"`)
 
 	//Quick validation
 	var pass = "true" //Lol
 	if(settings.keyPath == "")
 		pass = "No key"
 	
-	//console.log(rsync.command())
+	console.log(rsync.command())
 	rsync.output(
 		function(data){
 			console.log(data)
@@ -92,6 +93,19 @@ function rsyncdelete(localPath: string, filePath: string, settings: MyPluginSett
 		});
 	else
 		console.log("Sync failed! \""+pass+"\"")
+}
+
+function changeRibbonIcon(name: string, icon: string) {
+	var elem = document.querySelector('div[aria-label*="'+name+'"]');
+	if(elem == null) 
+		return;
+	
+
+	elem.remove();
+	const ribbonIconEl = this.addRibbonIcon('clock', 'Custom Sync', (evt: MouseEvent) => {
+		// Called when the user clicks the icon.
+		new Notice('This is a notice!');
+	});
 }
 
 export default class MyPlugin extends Plugin {
@@ -134,14 +148,16 @@ export default class MyPlugin extends Plugin {
 			//rsyncwrapper(local+vaultName, remote, settings) //Resync new changes
 		}));
 
+		// This creates an icon in the left ribbon.
+		const ribbonIconEl = this.addRibbonIcon('clock', 'Custom Sync', (evt: MouseEvent) => {
+			// Called when the user clicks the icon.
+			new Notice('This is a notice!');
+		});
+
+		//console.log(ribbonIconEl);
 
 		//Keeping this for reference lol
 		if(debug) {
-			// This creates an icon in the left ribbon.
-			const ribbonIconEl = this.addRibbonIcon('dice', 'Sample Plugin', (evt: MouseEvent) => {
-				// Called when the user clicks the icon.
-				new Notice('This is a notice!');
-			});
 			// Perform additional things with the ribbon
 			ribbonIconEl.addClass('my-plugin-ribbon-class');
 
