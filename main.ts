@@ -1,4 +1,6 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, addIcon } from 'obsidian';
+import { trolling } from 'icons';
+
 var Rsync = require('rsync')
 
 // Remember to rename these classes and interfaces!
@@ -19,11 +21,22 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 }
 
 function setIcon(cont, icon, name) {
-	const old = document.querySelector('[aria-label^="Custom Sync"]')
+	const old = document.querySelector('[aria-label^="Custom Sync"], [aria-label^="You"]')
 	if(old != null)
 		old.remove()
-	cont.addRibbonIcon(icon, "Custom Sync - "+name, () => {})
-}
+	var title = "Custom Sync - "+name;
+	if(icon == "trolling")
+		title = name
+
+	cont.addRibbonIcon(icon, title, (evt: MouseEvent) => {
+			if(icon="checkbox-glyph")
+			{
+				setIcon(cont, "trolling", "You just got trickaroonied!")
+				document.querySelector(".trolling").currentScale = .25;
+				setTimeout(()=>{setIcon(cont, "checkbox-glyph", "Up to date")}, 1750)
+			}
+		});
+	}
 
 //PROBABLY should exclude the plugins folder in our .obsidian
 //Although idk
@@ -110,6 +123,8 @@ export default class MyPlugin extends Plugin {
 		const settings = this.settings
 		var app = this.app
 		var cont = this;
+		addIcon("trolling", trolling)
+		
 	
 		//On load, we should sync from server to local.
 		this.registerEvent(this.app.workspace.on("css-change", ()=> {
