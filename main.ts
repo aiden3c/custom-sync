@@ -75,7 +75,10 @@ function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings, 
 
 function rsyncdelete(localPath: string, settings: MyPluginSettings, vaultName: string, resync = true, cont) {
 	//console.log("Removing old file...")
-	setIcon(cont, "sheets-in-box", "Processing changed file...")
+	if(resync)
+		setIcon(cont, "sheets-in-box", "Processing file change...")
+	else
+		setIcon(cont, "trash", "Deleting file...")
 
 	localPath = "/cygdrive/c/"+localPath;
 	var rsync = new Rsync()
@@ -98,6 +101,8 @@ function rsyncdelete(localPath: string, settings: MyPluginSettings, vaultName: s
 			if(error == null) {
 				if(resync) //If the file was moved, we resync to put its new location on the server
 					rsyncwrapper(localPath+vaultName, settings.remoteUrl+":"+settings.remotePath, settings, cont, "up-arrow-with-tail")
+				else
+					setIcon(cont, "checkbox-glyph", "Up to date")
 			}
 			else
 				setIcon(cont, "cross", error)
