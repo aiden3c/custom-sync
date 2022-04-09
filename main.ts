@@ -29,6 +29,11 @@ function setIcon(cont, icon, name) {
 		title = name
 
 	cont.addRibbonIcon(icon, title, (evt: MouseEvent) => {
+			console.log(evt)
+			//evt.buttons:
+			//0 = left click
+			//1 = middle click
+			//2 = right click
 			if(icon="checkbox-glyph")
 			{
 				setIcon(cont, "trolling", "You just got trickaroonied!")
@@ -129,6 +134,10 @@ export default class MyPlugin extends Plugin {
 		var app = this.app
 		var cont = this;
 		addIcon("trolling", trolling)
+
+		//List of possible rsync errors and what they mean (more or less)
+		//Code 12 - No Internet
+		//Code 23 - In this case, pretty sure it's "cannot find remote directory"
 		
 	
 		//On load, we should sync from server to local.
