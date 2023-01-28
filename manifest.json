@@ -1,10 +1,10 @@
 {
 	"id": "custom-sync",
 	"name": "Custom Sync",
-	"version": "1.0.0",
+	"version": "0.9.0",
 	"minAppVersion": "0.12.0",
-	"description": "A custom sync plugin for fellow broke people. Requires your own server to rsync with.",
+	"description": "A plugin to sync your Obsidian vaults to a server using rsync.",
 	"author": "Aiden Baker",
-	"authorUrl": "",
+	"authorUrl": "https://github.com/Naishaline",
 	"isDesktopOnly": false
 }

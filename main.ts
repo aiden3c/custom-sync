@@ -1,169 +1,212 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, addIcon } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, addIcon, debounce } from 'obsidian';
 import { trolling } from 'icons';
 
-var Rsync = require('rsync')
+/* eslint @typescript-eslint/no-var-requires: "off" */
+const os = require('os');
+const Rsync = require('rsync');
 
 // Remember to rename these classes and interfaces!
 
-interface MyPluginSettings {
+interface RsyncPluginSettings {
+	enabled: boolean;
+	debug: boolean;
 	keyPath: string;
 	remoteUrl: string;
 	remotePath: string;
-	cygwinPath: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
+const DEFAULT_SETTINGS: RsyncPluginSettings = {
+	enabled: false,
+	debug: false,
 	keyPath: '',
 	remoteUrl: '',
 	remotePath: '',
-	cygwinPath: 'F:/cygwin/bin/bash.exe'
-	
 }
 
-function setIcon(cont, icon, name) {
+function setIcon(cont: { addRibbonIcon: (arg0, arg1: string, arg2: (evt: MouseEvent) => void) => void; }, icon: string, name: string) {
 	const old = document.querySelector('[aria-label^="Custom Sync"], [aria-label^="You"]')
 	if(old != null)
 		old.remove()
-	var title = "Custom Sync - "+name;
+	let title = "Custom Sync - "+name;
 	if(icon == "trolling")
 		title = name
 
 	cont.addRibbonIcon(icon, title, (evt: MouseEvent) => {
-			console.log(evt)
-			//evt.buttons:
-			//0 = left click
-			//1 = middle click
-			//2 = right click
-			if(icon="checkbox-glyph")
-			{
-				setIcon(cont, "trolling", "You just got trickaroonied!")
-				document.querySelector(".trolling").currentScale = .25;
-				setTimeout(()=>{setIcon(cont, "checkbox-glyph", "Up to date")}, 1750)
-			}
-		});
-	}
+		//evt.button:
+		//0 = left click
+		//1 = middle click
+		//2 = right click
+		if(icon=="checkmark" && evt.button == 1 && evt.buttons == 0) //Possible bugs when pressing multiple buttons if buttons == 0 isn't here
+		{
+			setIcon(cont, "trolling", "You just got trickaroonied!")
+			document.querySelector(".trolling").currentScale = .25;
+			setTimeout(()=>{setIcon(cont, "checkmark", "Up to date")}, 1750)
+		}
+	});
+}
 
-//PROBABLY should exclude the plugins folder in our .obsidian
-//Although idk
-function rsyncwrapper(source: string, dest: string, settings: MyPluginSettings, cont, icon: string):any {
-
+function rsyncwrapper(source: string, dest: string, settings: RsyncPluginSettings, cont: this, icon: string, force: false) {
+	if(!settings.enabled && !force)
+		return;
 	//console.log("Syncing...\n[Source: "+source+"]\n[Dest: "+dest+"]");
 	//changeRibbonIcon("Custom Sync", "clock")
 	setIcon(cont, icon, "Syncing...")
-	
-	var rsync = new Rsync()
+	let executable = "rsync" ;
+	let rsh = "ssh" ;
+	if(os.platform() == "win32")
+	{
+		executable = this.app.vault.adapter.basePath+"/.obsidian/plugins/custom-sync/lib/rsync/bin/rsync.exe" ;
+		rsh = this.app.vault.adapter.basePath+"/.obsidian/plugins/custom-sync/lib/rsync/bin/ssh.exe"
+	}
+
+	const rsync = new Rsync()
 		.flags("rqc")
-		.executable(settings.cygwinPath+" -lc 'rsync")
-		.set("rsh", "ssh -i "+settings.keyPath)
-		.set("exclude", "*plugins") //Fuck plugins bro
+		.executable(executable)
+		.set("rsh", rsh+ " -i "+settings.keyPath)
+		.set("exclude", "*plugins") //Exclude plugins
 		.source(source)
 		.destination(dest)
 
+	rsync.cwd(this.app.vault.adapter.basePath.slice(0, -this.app.vault.getName().length))
+
+	if(settings.debug)
+	{
+		console.log("Working Directory")
+		console.log(rsync.cwd())
+		console.log("Command")
+		console.log(rsync.command())
+	}
+
 	//Quick validation
-	var pass = "true" //Lol
+	let pass = "true" //Lol
 	if(settings.keyPath == "")
 		pass = "No key"
-	
-	//console.log(rsync.command())
 
 	if(pass === "true")
-		rsync.execute(function(error, code, cmd) {
+	{
+		rsync.execute(function(error) {
 			if(error == null)
-				setIcon(cont, "checkbox-glyph", "Up to date")
+				setIcon(cont, "checkmark", "Up to date")
 			else
 				setIcon(cont, "cross", error)
-		});
+		});	
+	}
 	else
 		setIcon(cont, "cross", "Sync failed! \""+pass+"\"")
 	
 }
 
-function rsyncdelete(localPath: string, settings: MyPluginSettings, vaultName: string, resync = true, cont) {
-	//console.log("Removing old file...")
+//Moving/deleting of a file
+function rsyncdelete(localPath: string, settings: RsyncPluginSettings, vaultName: string, resync = true, cont) {
+	if(!settings.enabled)
+		return;
+
 	if(resync)
 		setIcon(cont, "sheets-in-box", "Processing file change...")
 	else
 		setIcon(cont, "trash", "Deleting file...")
 
-	localPath = "/cygdrive/c/"+localPath;
-	var rsync = new Rsync()
+
+	let executable = "rsync" ;
+	let rsh = "ssh" ;
+	if(os.platform() == "win32")
+	{
+		executable = this.app.vault.adapter.basePath+"/.obsidian/plugins/custom-sync/lib/rsync/bin/rsync.exe" ;
+		rsh = this.app.vault.adapter.basePath+"/.obsidian/plugins/custom-sync/lib/rsync/bin/ssh.exe"
+	}
+	
+	const rsync = new Rsync()
 		.flags("r")
-		.executable(settings.cygwinPath+" -lc 'rsync")
-		.set("rsh", "ssh -i "+settings.keyPath)
+		.executable(executable)
+		.set("rsh", rsh+ " -i "+settings.keyPath)
 		.set("delete")
+		.set("size-only")
+		.set("exclude", "*plugins") //Exclude plugins
 		.source(localPath+vaultName)
 		.destination(settings.remoteUrl+":"+settings.remotePath)
 
+	rsync.cwd(this.app.vault.adapter.basePath.slice(0, -this.app.vault.getName().length))
+
+	if(settings.debug)
+	{		
+		console.log("Working Directory")
+		console.log(rsync.cwd())
+		console.log("Command")
+		console.log(rsync.command())
+	}
+
 	//Quick validation
-	var pass = "true" //Lol
+	let pass = "true" //Lol
 	if(settings.keyPath == "")
 		pass = "No key"
 	
 	//console.log(rsync.command())
 
 	if(pass === "true")
-		rsync.execute(function(error, code, cmd) {
+	{
+		rsync.execute(function(error) {
 			if(error == null) {
 				if(resync) //If the file was moved, we resync to put its new location on the server
-					rsyncwrapper(localPath+vaultName, settings.remoteUrl+":"+settings.remotePath, settings, cont, "up-arrow-with-tail")
+					rsyncwrapper(vaultName, settings.remoteUrl+":"+settings.remotePath, settings, cont, "up-arrow-with-tail")
 				else
-					setIcon(cont, "checkbox-glyph", "Up to date")
+					setIcon(cont, "checkmark", "Up to date")
 			}
 			else
 				setIcon(cont, "cross", error)
 		});
+	}
 	else
-	setIcon(cont, "cross", "Sync failed! \""+pass+"\"")
+	{
+		setIcon(cont, "cross", "Sync failed! \""+pass+"\"")
+	}
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class RsyncPlugin extends Plugin {
+	settings: RsyncPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
 		
 		//Clean this up eventually
 		//"Globals"
-		const debug = false;
 		const vaultName = this.app.vault.getName();
-		const keyPath = this.settings.keyPath;//"/cygdrive/c/Users/baker/.ssh/id_rsa";
 		const remote = this.settings.remoteUrl+":"+this.settings.remotePath;
 		//TODO make it so we detect if on Windows to prepend the cygdrive bs
-		const local = "/cygdrive/c/"+this.app.vault.adapter.basePath.slice(3, -vaultName.length);
 		const settings = this.settings
-		var app = this.app
-		var cont = this;
 		addIcon("trolling", trolling)
 
+		if(settings.enabled)
+			setIcon(this, "checkmark", "Loaded")
 		//List of possible rsync errors and what they mean (more or less)
 		//Code 12 - No Internet
 		//Code 23 - In this case, pretty sure it's "cannot find remote directory"
 		
-	
-		//On load, we should sync from server to local.
-		this.registerEvent(this.app.workspace.on("css-change", ()=> {
-			rsyncwrapper(remote+vaultName, local, this.settings, cont, "down-arrow-with-tail")
+
+		//On obsidian start, we should sync from server to local.
+		this.registerEvent(this.app.workspace.on("window-open", ()=> {
+			rsyncwrapper(remote+vaultName, ".", this.settings, this, "down-arrow-with-tail")
 		}))
 
 		//New Vault created, see if it exists on remote and if not put it there.
 		//If it does exist, move from remote to local. This really shouldn't be that big a deal but we might encounter it.
-		
-		//On Vault save, sync to remote 
-		this.registerEvent(this.app.vault.on("modify", ()=>{
-			rsyncwrapper(local+vaultName, remote, this.settings, cont, "up-arrow-with-tail")
-			}));
+		//TODO
+
+		//On Vault save, sync to remote. Debounce to 2 seconds so not every single change is sent as separate requests. (does this actually work?)
+		this.registerEvent(this.app.vault.on("modify", () => {
+			debounce(rsyncwrapper(vaultName, remote, this.settings, this, "up-arrow-with-tail"), 2000, true)
+		}));
 
 		//On file delete
 		this.registerEvent(this.app.vault.on('delete', function(file){
-			rsyncdelete(app.vault.adapter.basePath.slice(3, -vaultName.length), settings, vaultName, false, cont) //Slice is WINDOWS ONLY
+			rsyncdelete("", settings, vaultName, false, this)
 		}));
 
 		//On file move/rename
 		this.registerEvent(this.app.vault.on('rename', function(file, oldPath){
-			rsyncdelete(app.vault.adapter.basePath.slice(3, -vaultName.length), settings, vaultName, true, cont) //Slice is WINDOWS ONLY
+			rsyncdelete("", settings, vaultName, true, this)
 		}));
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
+		// This adds a settings tab so the user can configure the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 	}
 
@@ -181,9 +224,9 @@ export default class MyPlugin extends Plugin {
 }
 
 class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: RsyncPlugin;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: RsyncPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -193,11 +236,24 @@ class SampleSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Sync Settings.'});
+		containerEl.createEl('h2', {text: 'Sync Settings'});
+
+		new Setting(containerEl)
+			.setName('Enable Syncing')
+			.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.enabled)
+					.onChange(async (value) =>{
+						if(value)
+							setIcon(this.plugin, "checkmark", "Loaded");
+						else
+							document.querySelector('[aria-label^="Custom Sync"], [aria-label^="You"]').remove();
+						this.plugin.settings.enabled = value;
+						await this.plugin.saveSettings();					
+				}));
 
 		new Setting(containerEl)
 			.setName('SSH Key Path')
-			.setDesc('Your SSH Private Key, used for logging into server. Please generate the key to use no password, just wont work otherwise. If you\'re on Windows, use the cygdrive path to the key.')
+			.setDesc('Path to your SSH Private Key, used for logging into server. Must be generated as passwordless.')
 			.addText(text => text
 				.setPlaceholder('Enter the path to your secret key.')
 				.setValue(this.plugin.settings.keyPath)
@@ -209,7 +265,7 @@ class SampleSettingTab extends PluginSettingTab {
 			.setName('Remote address')
 			.setDesc('Remote server URL/IP')
 			.addText(text => text
-				.setPlaceholder('name@example.com')
+				.setPlaceholder('user@server.com')
 				.setValue(this.plugin.settings.remoteUrl)
 				.onChange(async (value) => {
 					this.plugin.settings.remoteUrl = value;
@@ -219,23 +275,51 @@ class SampleSettingTab extends PluginSettingTab {
 			.setName('Remote directory')
 			.setDesc('Path to the remote backup folder.')
 			.addText(text => text
-				.setPlaceholder('~/.obsidian/sync')
+				.setPlaceholder('~/.obsidian/sync/')
 				.setValue(this.plugin.settings.remotePath)
 				.onChange(async (value) => {
+					if(value[value.length-1] != "/")
+						value += "/"
 					this.plugin.settings.remotePath = value;
 					await this.plugin.saveSettings();
 				}));
+
+
+		containerEl.createEl('br');
+		containerEl.createEl('br');
+		containerEl.createEl('h2', {text: 'Manual Sync'});	
+
 		new Setting(containerEl)
-			.setName('Cygwin bash path')
-			.setDesc('Needed for Windows.')
-			.addText(text => text
-				.setPlaceholder('F:/cygwin/bin/bash.exe')
-				.setValue(this.plugin.settings.cygwinPath)
-				.onChange(async (value) => {
-					this.plugin.settings.cygwinPath = value;
-					await this.plugin.saveSettings();
-				}));
-				
+			.setName('Force a push from local to backup')
+			.addButton(button => button
+				.setButtonText("Force Push")
+				.onClick(async () => {
+					rsyncwrapper(this.app.vault.getName(), this.plugin.settings.remoteUrl+":"+this.plugin.settings.remotePath, this.plugin.settings, this.plugin, "up-arrow-with-tail", true)
+				})
+			);
+		new Setting(containerEl)
+			.setName('Force a pull from backup to local')
+			.addButton(button => button
+				.setButtonText("Force Pull")
+				.onClick(async () => {
+					rsyncwrapper(this.plugin.settings.remoteUrl+":"+this.plugin.settings.remotePath + this.app.vault.getName(), ".", this.plugin.settings, this.plugin, "down-arrow-with-tail", true)
+				})
+			);
 		
+
+		containerEl.createEl('br');
+		containerEl.createEl('br');
+		containerEl.createEl('h2', {text: 'Debug'});
+		new Setting(containerEl)
+			.setName('Enable Rsync Debugging')
+			.setDesc('Logs the rsync working directory and command to the console for each request.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.debug)
+				.onChange(async (value) =>{
+					this.plugin.settings.debug = value;
+					await this.plugin.saveSettings();					
+				})
+			);
+	
 	}
 }
