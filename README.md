@@ -15,12 +15,12 @@ The remote server must have an rsync server set up and configured.
 
 Create a directory that will contain your vaults.
 
-For each device using the rsync plugin, generate an SSH key on that machine and add the public key to the `~/.ssh/known_keys` file on your server.
+For each device using the rsync plugin, generate an SSH key on that machine and add the public key to the `~/.ssh/authorized_keys` file on your server.
 
 
 ## Configuring Plugin
 ### SSH Key Path
-The path to your SSH private key on the local machine. Used to authenticate with the server. The server should have the associated public key in its `~/.ssh/known_hosts` file.
+The path to your SSH private key on the local machine. Used to authenticate with the server. The server should have the associated public key in its `~/.ssh/authorized_keys` file.
 
 ### Remote Address
 The remote address of the server. Written as `username@serveraddress`. The server address can be a domain, or IP address.
