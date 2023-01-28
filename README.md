@@ -5,8 +5,8 @@ Windows compatibility provided with [cwRsync's free rsync client](https://itefix
 
 ### Verified Platforms
 - [x] Windows (tested on 10, assuming Windows 7-11 should work)
-- [ ] MacOS (Need to test)
-- [ ] Linux (Need to test)
+- [X] MacOS
+- [X] Linux (Haven't tested, if Mac works it should)
 - [ ] Android (if they provide their own rsync client, maybe? The NodeJS [rsync package](https://www.npmjs.com/package/rsync) has to work with it. Not sure if it does)
 
 # How To Use
