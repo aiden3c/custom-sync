@@ -4,6 +4,9 @@ import { trolling } from 'icons';
 /* eslint @typescript-eslint/no-var-requires: "off" */
 const os = require('os');
 const Rsync = require('rsync');
+const wget = require('wget');
+const fs = require("fs");
+const decompress = require('decompress');
 
 // Remember to rename these classes and interfaces!
 
@@ -166,7 +169,19 @@ export default class RsyncPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
-		
+		if(os.platform == "win32" && await !fs.existsSync(this.app.vault.adapter.basePath+"/.obsidian/plugins/custom-sync/lib") ) //Is the await needed?
+		{
+			console.log("Windows dependencies not present. Downloading")
+			setIcon(this, "install", "Downloading Windows Deps")
+			const depPath = this.app.vault.adapter.basePath+"/.obsidian/plugins/custom-sync/";
+			wget.download("https://raw.githubusercontent.com/Naishaline/custom-sync/master/windows-deps.zip", depPath+"/windows-deps.zip").on("end", function(output){
+				decompress(depPath+"/windows-deps.zip", depPath)
+				fs.unlinkSync(depPath+"/windows-deps.zip")
+			}).on('error', function(err) {
+				console.log(err);
+				setIcon(this, "cross", "Check console for errors.")
+			});
+		}
 		//Clean this up eventually
 		//"Globals"
 		const vaultName = this.app.vault.getName();
