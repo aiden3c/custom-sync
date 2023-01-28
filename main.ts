@@ -45,7 +45,7 @@ function setIcon(cont: { addRibbonIcon: (arg0, arg1: string, arg2: (evt: MouseEv
 	});
 }
 
-function rsyncwrapper(source: string, dest: string, settings: RsyncPluginSettings, cont: this, icon: string, force: false) {
+function rsyncwrapper(source: string, dest: string, settings: RsyncPluginSettings, cont, icon: string, force = false) {
 	if(!settings.enabled && !force)
 		return;
 	//console.log("Syncing...\n[Source: "+source+"]\n[Dest: "+dest+"]");
